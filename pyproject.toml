@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cos"
+version = "0.1.0"
+description = "Personal Chief of Staff assistant powered by Claude"
+requires-python = ">=3.10"
+dependencies = [
+    "anthropic>=0.40.0",
+    "google-api-python-client>=2.120.0",
+    "google-auth>=2.28.0",
+    "google-auth-oauthlib>=1.2.0",
+    "google-auth-httplib2>=0.2.0",
+    "python-dotenv>=1.0.1",
+    "rich>=13.7.0",
+    "click>=8.1.7",
+    "python-dateutil>=2.9.0",
+    "tzdata>=2024.1",
+]
+
+[project.scripts]
+cos = "cos.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["cos*"]
+
+[tool.setuptools.package-data]
+"cos" = ["prompts/*.md"]
