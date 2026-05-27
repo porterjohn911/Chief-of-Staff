@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from . import gmail, calendar, health, projects, journal, relationships
 from .registry import TOOL_SCHEMAS, dispatch
 

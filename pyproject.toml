@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "cos"
 version = "0.1.0"
 description = "Personal Chief of Staff assistant powered by Claude"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 dependencies = [
     "anthropic>=0.40.0",
     "google-api-python-client>=2.120.0",

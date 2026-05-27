@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from ..storage import connect, now
 from .registry import tool
 

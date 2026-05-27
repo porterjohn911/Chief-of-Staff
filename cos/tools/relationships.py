@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import date as _date, timedelta
 
 from ..storage import connect, now
