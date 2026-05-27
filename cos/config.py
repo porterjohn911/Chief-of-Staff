@@ -31,7 +31,7 @@ CLAUDE_FAST_MODEL = _get("CLAUDE_FAST_MODEL", "claude-haiku-4-5-20251001")
 
 USER_NAME = _get("USER_NAME", "friend")
 USER_EMAIL = _get("USER_EMAIL", "")
-USER_TIMEZONE = _get("USER_TIMEZONE", "America/Los_Angeles")
+USER_TIMEZONE = _get("USER_TIMEZONE", "America/New_York")
 AGENT_EMAIL = _get("AGENT_EMAIL", USER_EMAIL)
 
 DATA_DIR = _expand(os.getenv("COS_DATA_DIR", "~/.local/share/cos"))
