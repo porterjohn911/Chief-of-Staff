@@ -41,10 +41,18 @@ cp .env.example .env
 
 Fill in:
 
-- `ANTHROPIC_API_KEY` — get one at https://console.anthropic.com
+- `USER_NAME`, `USER_EMAIL`, `USER_TIMEZONE`
 - `GOOGLE_OAUTH_CLIENT_SECRETS` — path to your OAuth client JSON
   (see "Set up Google APIs" below)
-- `USER_NAME`, `USER_TIMEZONE`, etc.
+
+No Anthropic API key required — the agent talks to Claude through the
+Claude Code CLI on your Mac, which is included in your Claude Pro/Max
+subscription. Install it and log in once:
+
+```bash
+npm install -g @anthropic-ai/claude-code   # requires Node.js
+claude /login                              # pick "Claude.ai account"
+```
 
 ### 3. Set up Google APIs (for Gmail + Calendar)
 
