@@ -8,7 +8,7 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 
 from . import config, storage
-from .agent import run_turn
+from .agent import AgentSession, run_turn
 
 console = Console()
 
@@ -47,35 +47,39 @@ def auth_google(account):
 
 @main.command()
 def chat():
-    """Start an interactive chat with the agent."""
+    """Start an interactive chat with the agent.
+
+    The session keeps conversation history across turns. Long-term memory
+    from past sessions is loaded automatically.
+    """
     storage.init_db()
-    history: list = []
     console.print(Panel.fit(
         f"Chief of Staff for [bold]{config.USER_NAME}[/bold]. Type 'exit' to quit.",
         border_style="cyan",
     ))
-    while True:
-        try:
-            user_in = console.input("[bold cyan]you[/bold cyan] > ").strip()
-        except (EOFError, KeyboardInterrupt):
+
+    def on_tool(name, inputs):
+        console.print(f"[dim]· {name}({_short(inputs)})[/dim]")
+
+    with AgentSession(on_tool=on_tool) as session:
+        while True:
+            try:
+                user_in = console.input("[bold cyan]you[/bold cyan] > ").strip()
+            except (EOFError, KeyboardInterrupt):
+                console.print()
+                return
+            if not user_in:
+                continue
+            if user_in.lower() in {"exit", "quit", "q"}:
+                return
+            try:
+                text = session.send(user_in)
+            except Exception as e:
+                console.print(f"[red]error:[/red] {e}")
+                continue
+            console.print("[bold magenta]cos[/bold magenta] >")
+            console.print(Markdown(text))
             console.print()
-            return
-        if not user_in:
-            continue
-        if user_in.lower() in {"exit", "quit", "q"}:
-            return
-
-        def on_tool(name, inputs):
-            console.print(f"[dim]· {name}({_short(inputs)})[/dim]")
-
-        try:
-            text, history = run_turn(user_in, history, on_tool=on_tool)
-        except Exception as e:
-            console.print(f"[red]error:[/red] {e}")
-            continue
-        console.print("[bold magenta]cos[/bold magenta] >")
-        console.print(Markdown(text))
-        console.print()
 
 
 def _short(d: dict) -> str:
@@ -236,6 +240,47 @@ def rel_due():
         od = c["days_overdue"]
         tag = f"[red]{od}d overdue[/red]" if od else "[yellow]never contacted[/yellow]"
         console.print(f"· {c['name']}  {tag}")
+
+
+@main.group()
+def memory():
+    """Long-term memory commands."""
+
+
+@memory.command("show")
+def memory_show():
+    """Print everything currently in long-term memory."""
+    from .memory import read_memory, memory_path
+    content = read_memory()
+    if not content.strip():
+        console.print("[dim]memory is empty.[/dim]")
+        return
+    console.print(Markdown(content))
+    console.print(f"\n[dim]stored at: {memory_path()}[/dim]")
+
+
+@memory.command("edit")
+def memory_edit():
+    """Open the memory file in $EDITOR."""
+    import os
+    import subprocess
+    from .memory import memory_path
+    p = memory_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    if not p.exists():
+        p.write_text("# Things to remember about the user\n\n")
+    editor = os.environ.get("EDITOR", "vi")
+    subprocess.call([editor, str(p)])
+    console.print("[green]saved.[/green]")
+
+
+@memory.command("clear")
+@click.confirmation_option(prompt="Erase all long-term memory?")
+def memory_clear():
+    """Erase the entire memory file."""
+    from .memory import clear_memory
+    clear_memory()
+    console.print("[yellow]memory cleared.[/yellow]")
 
 
 if __name__ == "__main__":

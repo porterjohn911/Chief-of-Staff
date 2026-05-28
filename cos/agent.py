@@ -9,6 +9,7 @@ from typing import Any
 from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
+    ClaudeSDKClient,
     TextBlock,
     create_sdk_mcp_server,
     query,
@@ -17,7 +18,8 @@ from claude_agent_sdk import (
 from zoneinfo import ZoneInfo
 
 from . import config
-from .tools import gmail, calendar, health, projects, journal, relationships  # noqa: F401  (imports register tools)
+from .memory import read_memory
+from .tools import gmail, calendar, health, projects, journal, relationships, memory as memory_tools  # noqa: F401
 from .tools.registry import _SCHEMAS, _TOOLS
 
 _SYSTEM_PATH = Path(__file__).parent / "prompts" / "system.md"
@@ -35,7 +37,11 @@ _JSON_TO_PY = {
 def _system_prompt() -> str:
     tmpl = _SYSTEM_PATH.read_text()
     today = datetime.now(ZoneInfo(config.USER_TIMEZONE)).strftime("%A, %B %d, %Y")
-    return tmpl.format(user_name=config.USER_NAME, today=today, timezone=config.USER_TIMEZONE)
+    base = tmpl.format(user_name=config.USER_NAME, today=today, timezone=config.USER_TIMEZONE)
+    mem = read_memory()
+    if mem.strip():
+        base += "\n\n---\n\n" + mem.strip() + "\n"
+    return base
 
 
 def _make_tool(name: str, desc: str, fn, props: dict):
@@ -91,12 +97,59 @@ async def _run_async(prompt: str, on_tool=None) -> str:
 
 
 def run_turn(user_input: str, history=None, on_tool=None, max_iters: int = 12):
-    """Sync wrapper around the SDK's async query.
-
-    History is currently not threaded across turns — each call is its own
-    session. Conversational continuity within `cos chat` is limited; persistent
-    state (tasks, journal, contacts, health logs) lives in SQLite so it carries
-    across turns through tool calls.
-    """
+    """One-shot query. Each call is its own session. Use AgentSession for multi-turn."""
     text = asyncio.run(_run_async(user_input, on_tool))
     return text, history or []
+
+
+class AgentSession:
+    """Multi-turn chat session. The SDK client preserves conversation history
+    across `send()` calls. Long-term memory.md is loaded into the system prompt
+    once at session start.
+
+    Usage:
+        with AgentSession(on_tool=cb) as s:
+            print(s.send("hello"))
+            print(s.send("what did i just say?"))
+    """
+
+    def __init__(self, on_tool=None):
+        self.on_tool = on_tool
+        self._client: ClaudeSDKClient | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+
+    def __enter__(self) -> AgentSession:
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
+        self._loop.run_until_complete(self._start())
+        return self
+
+    async def _start(self) -> None:
+        self._client = ClaudeSDKClient(options=_options())
+        await self._client.__aenter__()
+
+    def send(self, user_input: str) -> str:
+        assert self._loop is not None
+        return self._loop.run_until_complete(self._send(user_input))
+
+    async def _send(self, user_input: str) -> str:
+        assert self._client is not None
+        await self._client.query(user_input)
+        final: list[str] = []
+        async for msg in self._client.receive_response():
+            if isinstance(msg, AssistantMessage):
+                for block in msg.content:
+                    if isinstance(block, TextBlock):
+                        final.append(block.text)
+                    elif self.on_tool and hasattr(block, "name") and hasattr(block, "input"):
+                        try:
+                            self.on_tool(block.name, block.input)
+                        except Exception:
+                            pass
+        return "".join(final).strip()
+
+    def __exit__(self, exc_type, exc, tb):
+        if self._client is not None and self._loop is not None:
+            self._loop.run_until_complete(self._client.__aexit__(exc_type, exc, tb))
+        if self._loop is not None:
+            self._loop.close()
